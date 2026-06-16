@@ -1,0 +1,1029 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<meta name="theme-color" content="#075E54">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>WA Agregator – Rumah Tangga Kantor</title>
+
+<!-- ══════════════════════════════════════════════
+     🔥 KONFIGURASI FIREBASE — ISI BAGIAN INI
+     ══════════════════════════════════════════════
+     1. Buka: https://console.firebase.google.com
+     2. Klik "Add project" → beri nama proyek
+     3. Klik ikon </> (Web) untuk daftarkan app
+     4. Salin nilai firebaseConfig di bawah ini
+     5. Di Firebase Console → Build → Firestore Database
+        → Create database → Start in test mode
+     ══════════════════════════════════════════════ -->
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getFirestore, collection, addDoc, getDocs, deleteDoc, doc, onSnapshot, updateDoc, serverTimestamp, query, orderBy } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+// ✏️ GANTI DENGAN KONFIGURASI FIREBASE ANDA
+const firebaseConfig = {
+  apiKey: "GANTI_API_KEY_ANDA",
+  authDomain: "GANTI_PROJECT_ID.firebaseapp.com",
+  projectId: "GANTI_PROJECT_ID",
+  storageBucket: "GANTI_PROJECT_ID.appspot.com",
+  messagingSenderId: "GANTI_SENDER_ID",
+  appId: "GANTI_APP_ID"
+};
+
+// ── Init Firebase ──
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+
+// ── Koleksi Firestore ──
+const colGrups = collection(db, 'groups');
+const colMsgs  = collection(db, 'messages');
+const colTugas = collection(db, 'tugas');
+const colNotif = collection(db, 'notifikasi');
+
+// ── Expose ke global ──
+window.DB = { db, colGrups, colMsgs, colTugas, colNotif, addDoc, getDocs, deleteDoc, doc, onSnapshot, updateDoc, serverTimestamp, query, orderBy };
+window.firebaseReady = true;
+window.dispatchEvent(new Event('firebase-ready'));
+</script>
+
+<style>
+:root{--wa-dark:#075E54;--wa-mid:#128C7E;--wa-green:#25D366;--wa-light:#DCF8C6;--bg:#ECE5DD;--surface:#fff;--surface2:#f7f7f7;--border:#e0e0e0;--text:#111;--text2:#555;--text3:#888;--urgent:#E53935;--warning:#F57C00;--info:#1565C0;--success:#2E7D32;--radius:12px;--radius-sm:8px}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;font-family:-apple-system,'Segoe UI',Roboto,sans-serif;background:var(--bg);color:var(--text);font-size:15px}
+body{display:flex;flex-direction:column;height:100dvh;overflow:hidden}
+
+/* SETUP SCREEN */
+.setup-screen{position:fixed;inset:0;background:var(--wa-dark);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:999;padding:24px;color:#fff;text-align:center}
+.setup-screen.hidden{display:none}
+.setup-logo{font-size:52px;margin-bottom:16px}
+.setup-title{font-size:22px;font-weight:700;margin-bottom:8px}
+.setup-sub{font-size:13px;opacity:0.8;line-height:1.6;margin-bottom:28px}
+.setup-card{background:rgba(255,255,255,0.12);border-radius:var(--radius);padding:20px;width:100%;max-width:400px;text-align:left;margin-bottom:16px}
+.setup-card h3{font-size:14px;font-weight:600;margin-bottom:12px;opacity:0.9}
+.setup-step{display:flex;gap:10px;margin-bottom:10px;font-size:13px;opacity:0.85;align-items:flex-start}
+.step-num{background:var(--wa-green);border-radius:50%;width:22px;height:22px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0;margin-top:1px}
+.setup-input{width:100%;padding:10px 12px;border-radius:var(--radius-sm);border:none;font-size:13px;margin-top:6px;color:var(--text);font-family:inherit}
+.setup-btn{width:100%;padding:14px;background:var(--wa-green);color:#fff;border:none;border-radius:var(--radius);font-size:15px;font-weight:700;cursor:pointer;max-width:400px}
+.setup-btn:active{opacity:0.85}
+.setup-skip{font-size:12px;opacity:0.6;margin-top:12px;cursor:pointer;text-decoration:underline}
+
+/* TOP BAR */
+.topbar{background:var(--wa-dark);color:#fff;padding:10px 16px;display:flex;align-items:center;gap:10px;flex-shrink:0;position:sticky;top:0;z-index:100}
+.topbar-icon{font-size:22px}
+.topbar-title{font-size:17px;font-weight:600;flex:1;letter-spacing:-0.2px}
+.topbar-sub{font-size:11px;opacity:0.8}
+.topbar-btn{background:rgba(255,255,255,0.15);border:none;border-radius:50%;width:36px;height:36px;color:#fff;font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;position:relative}
+.notif-dot{position:absolute;top:4px;right:4px;width:8px;height:8px;background:var(--urgent);border-radius:50%;border:2px solid var(--wa-dark)}
+.conn-status{font-size:10px;padding:3px 8px;border-radius:10px;font-weight:600}
+.conn-ok{background:#dcf8c6;color:#075E54}
+.conn-err{background:#fde8e8;color:var(--urgent)}
+.conn-load{background:#fff3e0;color:var(--warning)}
+
+/* TABS */
+.tabs{background:var(--wa-dark);display:flex;flex-shrink:0;border-bottom:2px solid var(--wa-mid)}
+.tab{flex:1;padding:10px 4px;text-align:center;font-size:11px;font-weight:500;color:rgba(255,255,255,0.65);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-2px;transition:all 0.2s;letter-spacing:0.3px}
+.tab.active{color:#fff;border-bottom-color:var(--wa-green)}
+.tab-icon{font-size:16px;display:block;margin-bottom:2px}
+
+/* PAGES */
+.page{display:none;flex-direction:column;flex:1;overflow:hidden}
+.page.active{display:flex}
+
+/* STAT CARDS */
+.stats-row{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;padding:12px;flex-shrink:0;background:var(--bg)}
+.stat-card{background:var(--surface);border-radius:var(--radius-sm);padding:10px 6px;text-align:center;box-shadow:0 1px 3px rgba(0,0,0,0.08)}
+.stat-num{font-size:20px;font-weight:700;line-height:1}
+.stat-lbl{font-size:10px;color:var(--text3);margin-top:3px}
+.stat-num.green{color:var(--success)}.stat-num.red{color:var(--urgent)}.stat-num.orange{color:var(--warning)}.stat-num.blue{color:var(--info)}
+
+/* CHIPS */
+.chips{display:flex;gap:8px;padding:0 12px 10px;overflow-x:auto;flex-shrink:0;scrollbar-width:none}
+.chips::-webkit-scrollbar{display:none}
+.chip{display:flex;align-items:center;gap:5px;padding:6px 12px;border-radius:20px;font-size:12px;font-weight:500;background:var(--surface);border:1.5px solid var(--border);cursor:pointer;white-space:nowrap;transition:all 0.15s;color:var(--text2)}
+.chip.on{background:var(--wa-dark);color:#fff;border-color:var(--wa-dark)}
+.chip-badge{background:var(--urgent);color:#fff;border-radius:10px;font-size:9px;padding:1px 5px;font-weight:700}
+
+/* STATUS FILTERS */
+.status-filters{display:flex;gap:6px;padding:0 12px 10px;overflow-x:auto;flex-shrink:0;scrollbar-width:none}
+.status-filters::-webkit-scrollbar{display:none}
+.sfbtn{padding:4px 10px;border-radius:14px;font-size:11px;border:1.5px solid var(--border);background:var(--surface);color:var(--text2);cursor:pointer;white-space:nowrap;font-weight:500}
+.sfbtn.on{background:var(--wa-mid);color:#fff;border-color:var(--wa-mid)}
+
+/* MSG LIST */
+.msg-list{flex:1;overflow-y:auto;padding:0 12px 80px}
+.msg-card{background:var(--surface);border-radius:var(--radius);margin-bottom:10px;padding:12px 14px;box-shadow:0 1px 4px rgba(0,0,0,0.07);cursor:pointer;transition:transform 0.1s;border-left:3px solid transparent;position:relative}
+.msg-card:active{transform:scale(0.98)}
+.msg-card.unread{border-left-color:var(--wa-green)}
+.msg-card.urgent-card{border-left-color:var(--urgent)}
+.msg-top{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+.avatar{width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0}
+.msg-sender{font-size:13px;font-weight:600;flex:1}
+.msg-group-tag{font-size:10px;padding:2px 7px;border-radius:10px;background:var(--surface2);border:1px solid var(--border);color:var(--text2)}
+.msg-time{font-size:10px;color:var(--text3)}
+.unread-dot{width:8px;height:8px;border-radius:50%;background:var(--wa-green);flex-shrink:0}
+.msg-text{font-size:13px;color:var(--text);line-height:1.5}
+.msg-tags{display:flex;gap:5px;margin-top:7px;flex-wrap:wrap}
+.tag{font-size:10px;padding:2px 7px;border-radius:6px;border:1px solid var(--border);color:var(--text3)}
+.tag.urgent{color:var(--urgent);border-color:#fbb;background:#fff5f5}
+.tag.selesai{color:var(--success);border-color:#b2dfdb;background:#f0faf8}
+.tag.tugas{color:var(--warning);border-color:#ffe0b2;background:#fff8f0}
+.tag.laporan{color:var(--info);border-color:#bbdefb;background:#f0f6ff}
+.empty-state{text-align:center;padding:50px 20px;color:var(--text3)}
+.empty-state-icon{font-size:44px;display:block;margin-bottom:10px}
+
+/* GRUP PAGE */
+.grup-area{flex:1;overflow-y:auto;padding:12px 12px 80px}
+.grup-card{background:var(--surface);border-radius:var(--radius);padding:14px 16px;margin-bottom:10px;display:flex;align-items:center;gap:12px;box-shadow:0 1px 4px rgba(0,0,0,0.07)}
+.grup-emoji{font-size:28px;width:48px;height:48px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:var(--surface2);flex-shrink:0}
+.grup-name{font-size:14px;font-weight:600}
+.grup-sub{font-size:12px;color:var(--text3);margin-top:2px}
+.grup-actions{display:flex;gap:8px;margin-left:auto}
+.icon-btn{background:none;border:none;cursor:pointer;font-size:18px;padding:6px;border-radius:8px;transition:background 0.15s}
+.icon-btn:hover{background:var(--surface2)}
+.icon-btn.del{color:var(--urgent)}
+
+/* ADD GRUP FORM */
+.add-grup-card{background:var(--surface);border-radius:var(--radius);padding:16px;margin-bottom:14px;box-shadow:0 1px 4px rgba(0,0,0,0.07)}
+.add-grup-card h3{font-size:14px;font-weight:600;color:var(--wa-dark);margin-bottom:14px;border-bottom:1px solid var(--border);padding-bottom:8px}
+.form-row{margin-bottom:12px}
+.form-row label{display:block;font-size:11px;font-weight:600;color:var(--text2);margin-bottom:5px;text-transform:uppercase;letter-spacing:0.5px}
+.form-row input,.form-row select,.form-row textarea{width:100%;padding:10px 12px;border:1.5px solid var(--border);border-radius:var(--radius-sm);font-size:14px;font-family:inherit;background:var(--surface2);color:var(--text);outline:none;transition:border-color 0.15s;-webkit-appearance:none}
+.form-row input:focus,.form-row select:focus,.form-row textarea:focus{border-color:var(--wa-mid);background:#fff}
+.form-row textarea{min-height:80px;resize:none}
+.emoji-grid{display:grid;grid-template-columns:repeat(8,1fr);gap:6px;margin-top:6px}
+.emoji-opt{font-size:22px;padding:6px;border-radius:8px;cursor:pointer;text-align:center;border:2px solid transparent;transition:all 0.15s}
+.emoji-opt.sel{border-color:var(--wa-mid);background:#e8f5e9}
+.color-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:8px;margin-top:6px}
+.color-opt{height:32px;border-radius:8px;cursor:pointer;border:3px solid transparent;transition:all 0.15s}
+.color-opt.sel{border-color:#000;transform:scale(1.1)}
+.submit-btn{width:100%;padding:14px;background:var(--wa-mid);color:#fff;border:none;border-radius:var(--radius);font-size:15px;font-weight:600;cursor:pointer;transition:background 0.15s;letter-spacing:0.2px}
+.submit-btn:active{background:var(--wa-dark)}
+
+/* PESAN FORM */
+.pesan-form{background:var(--surface);border-radius:var(--radius);padding:16px;margin-bottom:14px;box-shadow:0 1px 4px rgba(0,0,0,0.07)}
+.pesan-form h3{font-size:14px;font-weight:600;color:var(--wa-dark);margin-bottom:14px;border-bottom:1px solid var(--border);padding-bottom:8px}
+.priority-row{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.priority-btn{padding:8px;border:1.5px solid var(--border);border-radius:var(--radius-sm);text-align:center;font-size:12px;font-weight:500;cursor:pointer;transition:all 0.15s;background:var(--surface2);color:var(--text2)}
+.priority-btn.sel-urgent{background:#fde8e8;border-color:var(--urgent);color:var(--urgent)}
+.priority-btn.sel-sedang{background:#fff3e0;border-color:var(--warning);color:var(--warning)}
+.priority-btn.sel-rendah{background:#e8f5e9;border-color:var(--success);color:var(--success)}
+
+/* TUGAS */
+.form-area{flex:1;overflow-y:auto;padding:12px 12px 80px}
+.form-card{background:var(--surface);border-radius:var(--radius);padding:16px;margin-bottom:14px;box-shadow:0 1px 4px rgba(0,0,0,0.07)}
+.form-card h3{font-size:14px;font-weight:600;margin-bottom:14px;color:var(--wa-dark);border-bottom:1px solid var(--border);padding-bottom:8px}
+.tugas-item{background:var(--surface);border-radius:var(--radius);padding:12px 14px;margin-bottom:8px;display:flex;gap:10px;align-items:flex-start;box-shadow:0 1px 3px rgba(0,0,0,0.07)}
+.tugas-check{width:22px;height:22px;border:2px solid var(--border);border-radius:50%;flex-shrink:0;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:12px;transition:all 0.15s;margin-top:1px}
+.tugas-check.done{background:var(--wa-green);border-color:var(--wa-green);color:#fff}
+.tugas-title{font-size:13px;font-weight:500;line-height:1.4}
+.tugas-title.done-text{text-decoration:line-through;color:var(--text3)}
+.tugas-meta{font-size:11px;color:var(--text3);margin-top:3px}
+
+/* LAPORAN */
+.laporan-area{flex:1;overflow-y:auto;padding:12px 12px 80px}
+.laporan-header{background:linear-gradient(135deg,var(--wa-dark),var(--wa-mid));border-radius:var(--radius);padding:16px;color:#fff;margin-bottom:12px;text-align:center}
+.lap-section{background:var(--surface);border-radius:var(--radius);padding:14px;margin-bottom:10px;box-shadow:0 1px 3px rgba(0,0,0,0.07)}
+.lap-section h3{font-size:13px;font-weight:600;color:var(--wa-dark);margin-bottom:10px;display:flex;align-items:center;gap:6px}
+.lap-row{display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border)}
+.lap-row:last-child{border-bottom:none}
+.lap-label{font-size:12px;color:var(--text2);display:flex;align-items:center;gap:6px}
+.lap-val{font-size:12px;font-weight:600}
+.prog-bar{height:6px;background:var(--border);border-radius:3px;margin-top:4px;overflow:hidden}
+.prog-fill{height:100%;border-radius:3px;background:var(--wa-green);transition:width 0.5s}
+.export-btn{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;padding:13px;border-radius:var(--radius);font-size:14px;font-weight:600;cursor:pointer;border:none;transition:all 0.15s;margin-bottom:8px}
+.export-btn:active{opacity:0.85}
+.btn-csv{background:#e8f5e9;color:var(--success)}
+.btn-print{background:#e3f2fd;color:var(--info)}
+.btn-wa{background:#dcf8c6;color:var(--wa-dark)}
+
+/* NOTIF */
+.notif-list{flex:1;overflow-y:auto;padding:12px}
+.notif-item{background:var(--surface);border-radius:var(--radius);margin-bottom:8px;padding:12px 14px;display:flex;gap:12px;align-items:flex-start;box-shadow:0 1px 3px rgba(0,0,0,0.07);border-left:3px solid transparent}
+.notif-item.urgent{border-left-color:var(--urgent)}
+.notif-item.warning{border-left-color:var(--warning)}
+.notif-item.info{border-left-color:var(--info)}
+.notif-icon{font-size:22px;flex-shrink:0;margin-top:2px}
+.notif-title{font-size:13px;font-weight:600;margin-bottom:3px}
+.notif-desc{font-size:12px;color:var(--text2);line-height:1.4}
+.notif-time{font-size:10px;color:var(--text3);margin-top:4px}
+.notif-badge{display:inline-block;font-size:9px;padding:2px 6px;border-radius:8px;font-weight:700;margin-left:6px}
+.badge-urgent{background:#fde8e8;color:var(--urgent)}
+.badge-warning{background:#fff3e0;color:var(--warning)}
+.badge-info{background:#e3f2fd;color:var(--info)}
+
+/* MODAL */
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:200;align-items:flex-end;justify-content:center}
+.modal-overlay.open{display:flex}
+.modal{background:var(--surface);border-radius:20px 20px 0 0;padding:20px 16px 32px;width:100%;max-width:520px;max-height:90dvh;overflow-y:auto;animation:slideup 0.25s ease}
+@keyframes slideup{from{transform:translateY(100%)}to{transform:translateY(0)}}
+.modal-handle{width:36px;height:4px;background:var(--border);border-radius:2px;margin:0 auto 16px}
+.modal-title{font-size:16px;font-weight:700;margin-bottom:14px;color:var(--wa-dark)}
+.modal-close{float:right;background:none;border:none;font-size:22px;cursor:pointer;color:var(--text3);margin-top:-4px}
+
+/* CONFIRM DELETE */
+.confirm-box{background:#fff5f5;border:1.5px solid #fbb;border-radius:var(--radius);padding:14px;margin-bottom:14px}
+.confirm-box p{font-size:13px;color:var(--urgent);margin-bottom:12px;line-height:1.5}
+.confirm-btns{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.btn-cancel{padding:10px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);font-size:13px;cursor:pointer;font-weight:500}
+.btn-del{padding:10px;background:var(--urgent);color:#fff;border:none;border-radius:var(--radius-sm);font-size:13px;cursor:pointer;font-weight:600}
+
+/* LOADING */
+.loading{display:flex;align-items:center;justify-content:center;gap:8px;padding:30px;color:var(--text3);font-size:13px}
+.spinner{width:20px;height:20px;border:2px solid var(--border);border-top-color:var(--wa-mid);border-radius:50%;animation:spin 0.8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* TOAST */
+.toast{position:fixed;bottom:80px;left:50%;transform:translateX(-50%) translateY(20px);background:#222;color:#fff;padding:10px 20px;border-radius:20px;font-size:13px;z-index:300;opacity:0;transition:all 0.3s;white-space:nowrap;pointer-events:none}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+/* FAB */
+.fab{position:fixed;bottom:70px;right:18px;width:52px;height:52px;background:var(--wa-green);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:24px;box-shadow:0 4px 12px rgba(0,0,0,0.25);cursor:pointer;border:none;color:#fff;z-index:90;transition:transform 0.15s}
+.fab:active{transform:scale(0.92)}
+
+@media print{.topbar,.tabs,.fab,.export-btn,.chips,.status-filters{display:none!important}.page{display:flex!important}#pageLaporan{display:block!important}body{overflow:visible}}
+</style>
+</head>
+<body>
+
+<!-- ══════════ SETUP SCREEN ══════════ -->
+<div class="setup-screen" id="setupScreen">
+  <div class="setup-logo">🔥</div>
+  <div class="setup-title">Hubungkan ke Firebase</div>
+  <div class="setup-sub">Masukkan Project ID Firebase Anda agar data tersimpan di cloud dan bisa diakses semua pengguna secara real-time.</div>
+
+  <div class="setup-card">
+    <h3>📋 Cara mendapatkan Project ID:</h3>
+    <div class="setup-step"><span class="step-num">1</span><span>Buka <strong>console.firebase.google.com</strong></span></div>
+    <div class="setup-step"><span class="step-num">2</span><span>Klik <strong>Add project</strong> → beri nama → Next</span></div>
+    <div class="setup-step"><span class="step-num">3</span><span>Di Project Overview → klik ikon <strong>&lt;/&gt;</strong> (Web)</span></div>
+    <div class="setup-step"><span class="step-num">4</span><span>Daftarkan app → salin nilai <strong>firebaseConfig</strong></span></div>
+    <div class="setup-step"><span class="step-num">5</span><span>Build → <strong>Firestore Database</strong> → Create → Test mode</span></div>
+    <div class="form-row" style="margin-top:14px">
+      <label style="color:rgba(255,255,255,0.8)">Project ID Firebase</label>
+      <input type="text" id="inputProjectId" placeholder="contoh: wa-agregator-kantor-abc12" style="margin-top:6px">
+    </div>
+    <div class="form-row">
+      <label style="color:rgba(255,255,255,0.8)">API Key</label>
+      <input type="text" id="inputApiKey" placeholder="AIzaSy...">
+    </div>
+    <div class="form-row">
+      <label style="color:rgba(255,255,255,0.8)">App ID</label>
+      <input type="text" id="inputAppId" placeholder="1:123456:web:abc...">
+    </div>
+  </div>
+
+  <button class="setup-btn" onclick="saveFirebaseConfig()">✅ Simpan & Hubungkan</button>
+  <div class="setup-skip" onclick="skipSetup()">Lewati dulu, gunakan data lokal →</div>
+</div>
+
+<!-- ══════════ TOP BAR ══════════ -->
+<div class="topbar">
+  <span class="topbar-icon">📱</span>
+  <div style="flex:1">
+    <div class="topbar-title">WA Agregator</div>
+    <div class="topbar-sub">Rumah Tangga Kantor</div>
+  </div>
+  <span class="conn-status conn-load" id="connStatus">⏳ Menghubungkan...</span>
+  <button class="topbar-btn" onclick="showPage('notif',document.querySelector('[data-page=notif]'))" title="Notifikasi" style="margin-left:6px">
+    🔔<span class="notif-dot" id="notifDot"></span>
+  </button>
+</div>
+
+<!-- ══════════ TABS ══════════ -->
+<div class="tabs">
+  <div class="tab active" onclick="showPage('pesan',this)" data-page="pesan"><span class="tab-icon">💬</span>Pesan</div>
+  <div class="tab" onclick="showPage('grup',this)" data-page="grup"><span class="tab-icon">👥</span>Grup</div>
+  <div class="tab" onclick="showPage('tugas',this)" data-page="tugas"><span class="tab-icon">✅</span>Tugas</div>
+  <div class="tab" onclick="showPage('laporan',this)" data-page="laporan"><span class="tab-icon">📊</span>Laporan</div>
+  <div class="tab" onclick="showPage('notif',this)" data-page="notif"><span class="tab-icon">🔔</span>Alert</div>
+</div>
+
+<!-- ══════════ PAGE: PESAN ══════════ -->
+<div class="page active" id="pagePesan">
+  <div class="stats-row">
+    <div class="stat-card"><div class="stat-num blue" id="s-total">0</div><div class="stat-lbl">Pesan</div></div>
+    <div class="stat-card"><div class="stat-num red" id="s-unread">0</div><div class="stat-lbl">Belum Baca</div></div>
+    <div class="stat-card"><div class="stat-num orange" id="s-tugas">0</div><div class="stat-lbl">Tugas</div></div>
+    <div class="stat-card"><div class="stat-num green" id="s-selesai">0</div><div class="stat-lbl">Selesai</div></div>
+  </div>
+  <div class="chips" id="groupChips"></div>
+  <div class="status-filters" id="statusFilters"></div>
+  <div class="msg-list" id="msgList"><div class="loading"><div class="spinner"></div> Memuat pesan...</div></div>
+
+  <!-- Form tambah pesan -->
+  <div style="padding:10px 12px;border-top:1px solid var(--border);background:var(--surface);flex-shrink:0">
+    <div style="display:flex;gap:8px">
+      <select id="quickGrup" style="flex:1;padding:9px 10px;border:1.5px solid var(--border);border-radius:var(--radius-sm);font-size:13px;background:var(--surface2);color:var(--text);-webkit-appearance:none;outline:none"></select>
+      <button onclick="openTambahPesan()" style="padding:9px 14px;background:var(--wa-green);color:#fff;border:none;border-radius:var(--radius-sm);font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap">+ Pesan</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════ PAGE: GRUP ══════════ -->
+<div class="page" id="pageGrup">
+  <div class="grup-area">
+    <div class="add-grup-card">
+      <h3>➕ Tambah Grup Baru</h3>
+      <div class="form-row">
+        <label>Nama Grup</label>
+        <input type="text" id="g-nama" placeholder="Contoh: Taman & Lansekap" maxlength="40">
+      </div>
+      <div class="form-row">
+        <label>Emoji / Ikon</label>
+        <div class="emoji-grid" id="emojiGrid"></div>
+      </div>
+      <div class="form-row">
+        <label>Warna</label>
+        <div class="color-grid" id="colorGrid"></div>
+      </div>
+      <div class="form-row">
+        <label>Deskripsi (opsional)</label>
+        <input type="text" id="g-desc" placeholder="Contoh: Tim perawatan taman kantor" maxlength="60">
+      </div>
+      <button class="submit-btn" onclick="tambahGrup()">Simpan Grup ke Database ✓</button>
+    </div>
+    <div id="grupList"><div class="loading"><div class="spinner"></div> Memuat grup...</div></div>
+  </div>
+</div>
+
+<!-- ══════════ PAGE: TUGAS ══════════ -->
+<div class="page" id="pageTugas">
+  <div class="form-area">
+    <div class="form-card">
+      <h3>➕ Buat Permintaan Tugas Baru</h3>
+      <div class="form-row">
+        <label>Judul Tugas</label>
+        <input type="text" id="t-judul" placeholder="Contoh: Perbaiki AC ruang rapat..." maxlength="100">
+      </div>
+      <div class="form-row">
+        <label>Grup / Divisi</label>
+        <select id="t-grup"><option value="">-- Pilih Grup --</option></select>
+      </div>
+      <div class="form-row">
+        <label>Deskripsi</label>
+        <textarea id="t-desc" placeholder="Jelaskan detail tugas..."></textarea>
+      </div>
+      <div class="form-row">
+        <label>Lokasi / Ruangan</label>
+        <input type="text" id="t-lokasi" placeholder="Contoh: Lantai 3, Ruang Rapat A">
+      </div>
+      <div class="form-row">
+        <label>Prioritas</label>
+        <div class="priority-row">
+          <div class="priority-btn" onclick="setPriority('urgent',this)">🔴 Urgent</div>
+          <div class="priority-btn" onclick="setPriority('sedang',this)">🟡 Sedang</div>
+          <div class="priority-btn" onclick="setPriority('rendah',this)">🟢 Rendah</div>
+        </div>
+      </div>
+      <div class="form-row">
+        <label>Target Selesai</label>
+        <input type="datetime-local" id="t-deadline">
+      </div>
+      <button class="submit-btn" onclick="submitTugas()">Kirim Tugas ✓</button>
+    </div>
+    <div class="form-card">
+      <h3>📋 Daftar Tugas Aktif</h3>
+      <div id="tugasList"><div class="loading"><div class="spinner"></div> Memuat...</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════ PAGE: LAPORAN ══════════ -->
+<div class="page" id="pageLaporan">
+  <div class="laporan-area">
+    <div class="laporan-header">
+      <h2>📊 Laporan Harian</h2>
+      <p id="lapTgl"></p>
+    </div>
+    <div class="lap-section">
+      <h3>📈 Ringkasan</h3>
+      <div class="lap-row"><span class="lap-label">Total Pesan</span><span class="lap-val blue" id="lap-total">-</span></div>
+      <div class="lap-row"><span class="lap-label">🔴 Urgent</span><span class="lap-val" style="color:var(--urgent)" id="lap-urgent">-</span></div>
+      <div class="lap-row"><span class="lap-label">✅ Tugas Selesai</span><span class="lap-val" style="color:var(--success)" id="lap-selesai">-</span></div>
+      <div class="lap-row"><span class="lap-label">⏳ Menunggu</span><span class="lap-val" style="color:var(--warning)" id="lap-tunggu">-</span></div>
+      <div class="lap-row"><span class="lap-label">👥 Grup Aktif</span><span class="lap-val" style="color:var(--info)" id="lap-grup">-</span></div>
+    </div>
+    <div class="lap-section">
+      <h3>📊 Aktivitas Per Grup</h3>
+      <div id="lapGrup"><div class="loading"><div class="spinner"></div></div></div>
+    </div>
+    <button class="export-btn btn-csv" onclick="exportCSV()">📄 Export ke CSV</button>
+    <button class="export-btn btn-print" onclick="window.print()">🖨️ Cetak Laporan</button>
+    <button class="export-btn btn-wa" onclick="shareWA()">📤 Bagikan via WhatsApp</button>
+  </div>
+</div>
+
+<!-- ══════════ PAGE: NOTIF ══════════ -->
+<div class="page" id="pageNotif">
+  <div class="notif-list" id="notifList"><div class="loading"><div class="spinner"></div> Memuat...</div></div>
+</div>
+
+<!-- FAB -->
+<button class="fab" id="fab" onclick="fabAction()">+</button>
+
+<!-- MODAL DETAIL PESAN -->
+<div class="modal-overlay" id="msgModal" onclick="closeMsgModal(event)">
+  <div class="modal">
+    <button class="modal-close" onclick="document.getElementById('msgModal').classList.remove('open')">×</button>
+    <div class="modal-handle"></div>
+    <div class="modal-title" id="modalTitle">Detail Pesan</div>
+    <div id="modalBody"></div>
+  </div>
+</div>
+
+<!-- MODAL TAMBAH PESAN -->
+<div class="modal-overlay" id="pesanModal" onclick="closePesanModal(event)">
+  <div class="modal">
+    <button class="modal-close" onclick="document.getElementById('pesanModal').classList.remove('open')">×</button>
+    <div class="modal-handle"></div>
+    <div class="modal-title">📨 Tambah Pesan Baru</div>
+    <div class="form-row">
+      <label>Nama Pengirim</label>
+      <input type="text" id="p-sender" placeholder="Nama Anda...">
+    </div>
+    <div class="form-row">
+      <label>Grup Tujuan</label>
+      <select id="p-grup"></select>
+    </div>
+    <div class="form-row">
+      <label>Isi Pesan</label>
+      <textarea id="p-text" placeholder="Ketik pesan..."></textarea>
+    </div>
+    <div class="form-row">
+      <label>Status</label>
+      <select id="p-status">
+        <option value="info">ℹ️ Info</option>
+        <option value="tugas">📋 Tugas</option>
+        <option value="urgent">🔴 Urgent</option>
+        <option value="laporan">📝 Laporan</option>
+        <option value="selesai">✅ Selesai</option>
+      </select>
+    </div>
+    <button class="submit-btn" onclick="submitPesan()">Kirim Pesan ✓</button>
+  </div>
+</div>
+
+<!-- MODAL HAPUS GRUP -->
+<div class="modal-overlay" id="deleteModal" onclick="closeDeleteModal(event)">
+  <div class="modal">
+    <button class="modal-close" onclick="document.getElementById('deleteModal').classList.remove('open')">×</button>
+    <div class="modal-handle"></div>
+    <div class="modal-title">🗑️ Hapus Grup</div>
+    <div class="confirm-box">
+      <p>Yakin hapus grup <strong id="deleteGrupName"></strong>? Semua pesan dalam grup ini juga akan ikut terhapus. Tindakan ini tidak bisa dibatalkan.</p>
+      <div class="confirm-btns">
+        <button class="btn-cancel" onclick="document.getElementById('deleteModal').classList.remove('open')">Batal</button>
+        <button class="btn-del" onclick="konfirmasiHapusGrup()">Ya, Hapus</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div class="toast" id="toast"></div>
+
+<script>
+// ══════════════════════════════
+// STATE
+// ══════════════════════════════
+let grups = [];
+let msgs = [];
+let tugasData = [];
+let notifData = [];
+let activeGroup = 'all';
+let activeStatus = 'Semua';
+let selectedPrio = '';
+let selectedEmoji = '📋';
+let selectedColor = '#075E54';
+let deleteGrupId = null;
+let useFirebase = false;
+let unsubMsgs = null;
+let unsubTugas = null;
+let unsubGrups = null;
+
+const EMOJIS = ['🧹','🔐','📦','🔧','🚗','🍽️','🌿','💡','🖨️','🛗','🏊','🔑','📋','🏢','🧴','🪣','🗑️','🔒','📞','💊'];
+const COLORS = ['#075E54','#2E7D32','#1565C0','#E65100','#6A1B9A','#B71C1C','#00695C','#4E342E','#283593','#AD1457','#F57F17','#37474F'];
+
+// ══════════════════════════════
+// FIREBASE CONFIG SETUP
+// ══════════════════════════════
+function saveFirebaseConfig() {
+  const pid = document.getElementById('inputProjectId').value.trim();
+  const apiKey = document.getElementById('inputApiKey').value.trim();
+  const appId = document.getElementById('inputAppId').value.trim();
+  if (!pid || !apiKey) { showToast('Project ID dan API Key wajib diisi'); return; }
+  localStorage.setItem('fb_projectId', pid);
+  localStorage.setItem('fb_apiKey', apiKey);
+  localStorage.setItem('fb_appId', appId);
+  showToast('✅ Konfigurasi disimpan! Reload halaman untuk menghubungkan.');
+  document.getElementById('setupScreen').classList.add('hidden');
+  setTimeout(() => location.reload(), 1500);
+}
+
+function skipSetup() {
+  localStorage.setItem('fb_skip', '1');
+  document.getElementById('setupScreen').classList.add('hidden');
+  initLocalMode();
+}
+
+function checkSetup() {
+  const pid = localStorage.getItem('fb_projectId');
+  const skip = localStorage.getItem('fb_skip');
+  if (!pid && !skip) {
+    document.getElementById('setupScreen').style.display = 'flex';
+  } else {
+    document.getElementById('setupScreen').classList.add('hidden');
+  }
+}
+
+// ══════════════════════════════
+// FIREBASE / LOCAL MODE
+// ══════════════════════════════
+function initLocalMode() {
+  useFirebase = false;
+  setConnStatus('local');
+  grups = [
+    {id:'kebersihan',nama:'Kebersihan',emoji:'🧹',warna:'#2E7D32',desc:'Cleaning service'},
+    {id:'keamanan',nama:'Keamanan',emoji:'🔐',warna:'#1565C0',desc:'Security team'},
+    {id:'logistik',nama:'Logistik & ATK',emoji:'📦',warna:'#E65100',desc:'Perlengkapan kantor'},
+    {id:'teknis',nama:'Teknisi & AC',emoji:'🔧',warna:'#4E342E',desc:'Maintenance'},
+    {id:'parkir',nama:'Parkir',emoji:'🚗',warna:'#6A1B9A',desc:'Transport'},
+    {id:'kantin',nama:'Kantin',emoji:'🍽️',warna:'#B71C1C',desc:'Catering'},
+  ];
+  msgs = [
+    {id:'1',grupId:'kebersihan',sender:'Pak Darto',text:'Lantai 3 sudah selesai dipel. Kamar mandi executive masih menunggu sabun pengganti.',status:'tugas',unread:true,waktu:'08:12'},
+    {id:'2',grupId:'logistik',sender:'Ibu Sari',text:'Stok tinta printer habis, sudah pesan 5 cartridge. Estimasi tiba besok pagi.',status:'info',unread:true,waktu:'08:35'},
+    {id:'3',grupId:'keamanan',sender:'Pak Hendra',text:'Shift malam selesai, semua pintu terkunci. Buku tamu: 2 tamu lembur divisi keuangan.',status:'laporan',unread:false,waktu:'08:47'},
+    {id:'4',grupId:'kantin',sender:'Bu Endah',text:'Menu hari ini: nasi padang, bakso, gado-gado. Konfirmasi pesanan sebelum jam 10.',status:'info',unread:true,waktu:'09:10'},
+    {id:'5',grupId:'teknis',sender:'Mas Eko',text:'AC ruang rapat lantai 4 sudah diperbaiki. Coolant diisi ulang.',status:'selesai',unread:false,waktu:'09:22'},
+    {id:'6',grupId:'kebersihan',sender:'Pak Darto',text:'Mohon tambahan trash bag ukuran besar. Sisa stok tinggal 5 lembar.',status:'urgent',unread:true,waktu:'09:45'},
+    {id:'7',grupId:'parkir',sender:'Pak Bambang',text:'Parkir basement penuh sejak jam 9 pagi. Tamu dialihkan ke P2.',status:'urgent',unread:true,waktu:'10:03'},
+  ];
+  tugasData = [
+    {id:'t1',judul:'Isi ulang sabun kamar mandi executive',grupId:'kebersihan',prio:'urgent',selesai:false,deadline:'Hari ini 12:00'},
+    {id:'t2',judul:'Ganti harddisk CCTV lobby',grupId:'keamanan',prio:'sedang',selesai:false,deadline:'Besok'},
+    {id:'t3',judul:'Service AC rutin bulan depan',grupId:'teknis',prio:'rendah',selesai:true,deadline:'Bulan depan'},
+  ];
+  notifData = [
+    {type:'urgent',icon:'🚨',title:'URGENT: Parkir Basement Penuh',desc:'Pak Bambang melaporkan area parkir basement penuh sejak 09:00.',waktu:'10:03',grup:'🚗 Parkir'},
+    {type:'urgent',icon:'🔴',title:'Stok Trash Bag Kritis',desc:'Sisa stok trash bag hanya 5 lembar. Perlu reorder segera.',waktu:'09:45',grup:'🧹 Kebersihan'},
+    {type:'warning',icon:'⚠️',title:'CCTV Lobby Hampir Penuh',desc:'Harddisk CCTV mendekati kapasitas. Perlu penggantian segera.',waktu:'10:55',grup:'🔐 Keamanan'},
+    {type:'info',icon:'ℹ️',title:'Pengiriman Furnitur Kamis',desc:'Meja dan kursi baru akan tiba hari Kamis.',waktu:'10:15',grup:'📦 Logistik'},
+  ];
+  renderAll();
+}
+
+function initFirebaseMode() {
+  useFirebase = true;
+  setConnStatus('ok');
+  const { colGrups, colMsgs, colTugas, colNotif, onSnapshot, query, orderBy } = window.DB;
+
+  // Realtime listeners
+  unsubGrups = onSnapshot(colGrups, snap => {
+    grups = snap.docs.map(d => ({id: d.id, ...d.data()}));
+    renderChips();
+    renderGrupList();
+    renderGrupSelects();
+    renderLaporan();
+  });
+
+  unsubMsgs = onSnapshot(query(colMsgs, orderBy('ts','desc')), snap => {
+    msgs = snap.docs.map(d => ({id: d.id, ...d.data()}));
+    renderMsgs();
+    updateStats();
+  });
+
+  onSnapshot(query(colTugas, orderBy('ts','desc')), snap => {
+    tugasData = snap.docs.map(d => ({id: d.id, ...d.data()}));
+    renderTugasList();
+  });
+
+  onSnapshot(colNotif, snap => {
+    notifData = snap.docs.map(d => ({id: d.id, ...d.data()}));
+    renderNotifs();
+  });
+}
+
+function setConnStatus(s) {
+  const el = document.getElementById('connStatus');
+  if (s === 'ok') { el.textContent = '🟢 Online'; el.className = 'conn-status conn-ok'; }
+  else if (s === 'err') { el.textContent = '🔴 Offline'; el.className = 'conn-status conn-err'; }
+  else if (s === 'local') { el.textContent = '💾 Lokal'; el.className = 'conn-status conn-load'; }
+  else { el.textContent = '⏳ Menghubungkan...'; el.className = 'conn-status conn-load'; }
+}
+
+// ══════════════════════════════
+// RENDER ALL
+// ══════════════════════════════
+function renderAll() {
+  renderChips();
+  renderStatusFilters();
+  renderMsgs();
+  renderGrupList();
+  renderGrupSelects();
+  renderTugasList();
+  renderNotifs();
+  renderLaporan();
+  renderEmojiGrid();
+  renderColorGrid();
+  document.getElementById('lapTgl').textContent = new Date().toLocaleDateString('id-ID',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
+}
+
+// ══════════════════════════════
+// PAGE NAVIGATION
+// ══════════════════════════════
+function showPage(name, el) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  const pid = 'page' + name.charAt(0).toUpperCase() + name.slice(1);
+  document.getElementById(pid).classList.add('active');
+  if (el) el.classList.add('active');
+  document.getElementById('fab').style.display = (name==='tugas'||name==='laporan') ? 'none' : 'flex';
+}
+
+// ══════════════════════════════
+// CHIPS & FILTERS
+// ══════════════════════════════
+function renderChips() {
+  const all = [{id:'all',nama:'Semua',emoji:'📋',warna:'#075E54'}, ...grups];
+  document.getElementById('groupChips').innerHTML = all.map(g => {
+    const cnt = g.id==='all' ? msgs.filter(m=>m.unread).length : msgs.filter(m=>m.grupId===g.id&&m.unread).length;
+    return `<div class="chip${activeGroup===g.id?' on':''}" onclick="setGroup('${g.id}')">${g.emoji||'📋'} ${g.nama}${cnt>0?`<span class="chip-badge">${cnt}</span>`:''}</div>`;
+  }).join('');
+}
+
+function setGroup(id) { activeGroup=id; renderChips(); renderMsgs(); }
+
+const statuses = ['Semua','Urgent','Tugas','Laporan','Info','Selesai'];
+function renderStatusFilters() {
+  document.getElementById('statusFilters').innerHTML = statuses.map(s =>
+    `<button class="sfbtn${activeStatus===s?' on':''}" onclick="setStatus('${s}')">${s}</button>`
+  ).join('');
+}
+function setStatus(s) { activeStatus=s; renderStatusFilters(); renderMsgs(); }
+
+// ══════════════════════════════
+// MESSAGES
+// ══════════════════════════════
+function renderMsgs() {
+  let list = msgs.filter(m => activeGroup==='all' || m.grupId===activeGroup);
+  if (activeStatus!=='Semua') list = list.filter(m => m.status.toLowerCase()===activeStatus.toLowerCase());
+  const el = document.getElementById('msgList');
+  if (!list.length) {
+    el.innerHTML='<div class="empty-state"><span class="empty-state-icon">💬</span><div>Belum ada pesan</div></div>';
+  } else {
+    el.innerHTML = list.map(m => {
+      const g = grups.find(x=>x.id===m.grupId)||{emoji:'📋',nama:m.grupId,warna:'#075E54'};
+      const av = (m.sender||'?').split(' ').map(w=>w[0]).join('').substring(0,2).toUpperCase();
+      const avBg = g.warna+'22'; const avTxt = g.warna;
+      return `<div class="msg-card${m.unread?' unread':''}${m.status==='urgent'?' urgent-card':''}" onclick="openMsg('${m.id}')">
+        <div class="msg-top">
+          <div class="avatar" style="background:${avBg};color:${avTxt}">${av}</div>
+          <span class="msg-sender">${m.sender}</span>
+          <span class="msg-group-tag">${g.emoji} ${g.nama}</span>
+          <span class="msg-time">${m.waktu||''}</span>
+          ${m.unread?'<span class="unread-dot"></span>':''}
+        </div>
+        <div class="msg-text">${m.text}</div>
+        <div class="msg-tags"><span class="tag ${m.status}">${m.status}</span></div>
+      </div>`;
+    }).join('');
+  }
+  updateStats();
+}
+
+function updateStats() {
+  const v = activeGroup==='all'?msgs:msgs.filter(m=>m.grupId===activeGroup);
+  document.getElementById('s-total').textContent = v.length;
+  document.getElementById('s-unread').textContent = v.filter(m=>m.unread).length;
+  document.getElementById('s-tugas').textContent = v.filter(m=>m.status==='tugas'||m.status==='urgent').length;
+  document.getElementById('s-selesai').textContent = v.filter(m=>m.status==='selesai').length;
+}
+
+async function openMsg(id) {
+  const m = msgs.find(x=>x.id===id); if (!m) return;
+  if (m.unread) {
+    m.unread = false;
+    if (useFirebase) { const {db,doc,updateDoc} = window.DB; await updateDoc(doc(db,'messages',id),{unread:false}); }
+    renderChips(); renderMsgs();
+  }
+  const g = grups.find(x=>x.id===m.grupId)||{emoji:'📋',nama:m.grupId};
+  document.getElementById('modalTitle').textContent = g.emoji+' '+g.nama;
+  document.getElementById('modalBody').innerHTML = `
+    <p style="font-size:13px;font-weight:600;color:var(--text2);margin-bottom:6px">${m.sender} • ${m.waktu||''}</p>
+    <p style="font-size:14px;line-height:1.6;margin-bottom:14px">${m.text}</p>
+    <div class="msg-tags" style="margin-bottom:16px"><span class="tag ${m.status}">${m.status}</span></div>
+    <button onclick="replyWA('${m.sender}','${g.nama}')" style="width:100%;padding:12px;background:#dcf8c6;color:#075E54;border:none;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer;margin-bottom:8px">📤 Balas via WhatsApp</button>
+    <button onclick="hapusPesan('${m.id}')" style="width:100%;padding:12px;background:#fde8e8;color:var(--urgent);border:none;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer">🗑️ Hapus Pesan</button>
+  `;
+  document.getElementById('msgModal').classList.add('open');
+}
+
+async function hapusPesan(id) {
+  document.getElementById('msgModal').classList.remove('open');
+  if (useFirebase) {
+    const {db,doc,deleteDoc} = window.DB;
+    await deleteDoc(doc(db,'messages',id));
+  } else {
+    msgs = msgs.filter(x=>x.id!==id);
+    renderMsgs();
+  }
+  showToast('🗑️ Pesan dihapus');
+}
+
+function closeMsgModal(e) { if(e.target===document.getElementById('msgModal')) document.getElementById('msgModal').classList.remove('open'); }
+function replyWA(sender,grup) { window.open(`https://wa.me/?text=${encodeURIComponent('[WA Agregator] Re: '+sender+' ('+grup+'): ')}`, '_blank'); }
+
+// ══════════════════════════════
+// TAMBAH PESAN
+// ══════════════════════════════
+function openTambahPesan() {
+  renderPesanGrupSelect();
+  document.getElementById('pesanModal').classList.add('open');
+}
+function closePesanModal(e) { if(e.target===document.getElementById('pesanModal')) document.getElementById('pesanModal').classList.remove('open'); }
+
+function renderPesanGrupSelect() {
+  document.getElementById('p-grup').innerHTML = grups.map(g=>`<option value="${g.id}">${g.emoji} ${g.nama}</option>`).join('');
+}
+
+async function submitPesan() {
+  const sender = document.getElementById('p-sender').value.trim();
+  const grupId = document.getElementById('p-grup').value;
+  const text = document.getElementById('p-text').value.trim();
+  const status = document.getElementById('p-status').value;
+  if (!sender||!text||!grupId) { showToast('Lengkapi semua field'); return; }
+  const now = new Date();
+  const waktu = now.getHours().toString().padStart(2,'0')+':'+now.getMinutes().toString().padStart(2,'0');
+  const data = {sender,grupId,text,status,unread:true,waktu};
+  if (useFirebase) {
+    const {colMsgs,addDoc,serverTimestamp} = window.DB;
+    await addDoc(colMsgs, {...data, ts: serverTimestamp()});
+  } else {
+    msgs.unshift({id:'m'+Date.now(),...data});
+    renderMsgs();
+  }
+  document.getElementById('p-sender').value='';
+  document.getElementById('p-text').value='';
+  document.getElementById('pesanModal').classList.remove('open');
+  showToast('✅ Pesan dikirim!');
+}
+
+// ══════════════════════════════
+// GRUP
+// ══════════════════════════════
+function renderEmojiGrid() {
+  document.getElementById('emojiGrid').innerHTML = EMOJIS.map(e =>
+    `<div class="emoji-opt${e===selectedEmoji?' sel':''}" onclick="pickEmoji('${e}')">${e}</div>`
+  ).join('');
+}
+function renderColorGrid() {
+  document.getElementById('colorGrid').innerHTML = COLORS.map(c =>
+    `<div class="color-opt${c===selectedColor?' sel':''}" style="background:${c}" onclick="pickColor('${c}')"></div>`
+  ).join('');
+}
+function pickEmoji(e) { selectedEmoji=e; renderEmojiGrid(); }
+function pickColor(c) { selectedColor=c; renderColorGrid(); }
+
+async function tambahGrup() {
+  const nama = document.getElementById('g-nama').value.trim();
+  const desc = document.getElementById('g-desc').value.trim();
+  if (!nama) { showToast('Nama grup wajib diisi'); return; }
+  const data = {nama, emoji:selectedEmoji, warna:selectedColor, desc};
+  if (useFirebase) {
+    const {colGrups,addDoc,serverTimestamp} = window.DB;
+    await addDoc(colGrups, {...data, ts:serverTimestamp()});
+  } else {
+    const id = 'g'+Date.now();
+    grups.push({id,...data});
+    renderGrupList(); renderChips(); renderGrupSelects();
+  }
+  document.getElementById('g-nama').value='';
+  document.getElementById('g-desc').value='';
+  showToast('✅ Grup "'+nama+'" berhasil ditambahkan!');
+}
+
+function renderGrupList() {
+  const el = document.getElementById('grupList');
+  if (!grups.length) { el.innerHTML='<div class="empty-state"><span class="empty-state-icon">👥</span><div>Belum ada grup. Tambahkan di atas.</div></div>'; return; }
+  el.innerHTML = grups.map(g => `
+    <div class="grup-card">
+      <div class="grup-emoji" style="background:${g.warna}22">${g.emoji||'📋'}</div>
+      <div style="flex:1;min-width:0">
+        <div class="grup-name">${g.nama}</div>
+        <div class="grup-sub">${g.desc||'Grup rumah tangga kantor'}</div>
+      </div>
+      <div class="grup-actions">
+        <button class="icon-btn del" onclick="confirmHapusGrup('${g.id}','${g.nama}')" title="Hapus Grup">🗑️</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+function renderGrupSelects() {
+  const opts = grups.map(g=>`<option value="${g.id}">${g.emoji} ${g.nama}</option>`).join('');
+  document.getElementById('t-grup').innerHTML = '<option value="">-- Pilih Grup --</option>'+opts;
+  document.getElementById('quickGrup').innerHTML = opts;
+}
+
+function confirmHapusGrup(id, nama) {
+  deleteGrupId = id;
+  document.getElementById('deleteGrupName').textContent = nama;
+  document.getElementById('deleteModal').classList.add('open');
+}
+
+async function konfirmasiHapusGrup() {
+  if (!deleteGrupId) return;
+  document.getElementById('deleteModal').classList.remove('open');
+  if (useFirebase) {
+    const {db, doc, deleteDoc, colMsgs, getDocs, query} = window.DB;
+    // Hapus grup
+    await deleteDoc(doc(db, 'groups', deleteGrupId));
+    // Hapus pesan terkait
+    const snap = await getDocs(colMsgs);
+    for (const d of snap.docs) {
+      if (d.data().grupId === deleteGrupId) await deleteDoc(doc(db,'messages',d.id));
+    }
+  } else {
+    grups = grups.filter(g=>g.id!==deleteGrupId);
+    msgs = msgs.filter(m=>m.grupId!==deleteGrupId);
+    renderGrupList(); renderChips(); renderGrupSelects(); renderMsgs();
+  }
+  showToast('🗑️ Grup berhasil dihapus');
+  deleteGrupId = null;
+}
+
+function closeDeleteModal(e) { if(e.target===document.getElementById('deleteModal')) document.getElementById('deleteModal').classList.remove('open'); }
+
+// ══════════════════════════════
+// TUGAS
+// ══════════════════════════════
+function setPriority(p,el) {
+  selectedPrio=p;
+  document.querySelectorAll('.priority-btn').forEach(b=>b.className='priority-btn');
+  if(el) el.className=`priority-btn sel-${p}`;
+}
+
+async function submitTugas() {
+  const judul = document.getElementById('t-judul').value.trim();
+  const grupId = document.getElementById('t-grup').value;
+  const desc = document.getElementById('t-desc').value.trim();
+  const lokasi = document.getElementById('t-lokasi').value.trim();
+  const deadline = document.getElementById('t-deadline').value;
+  if (!judul||!grupId) { showToast('Isi judul dan grup terlebih dahulu'); return; }
+  const data = {judul,grupId,desc,lokasi,prio:selectedPrio||'sedang',deadline:deadline||'Belum ditentukan',selesai:false};
+  if (useFirebase) {
+    const {colTugas,addDoc,serverTimestamp} = window.DB;
+    await addDoc(colTugas, {...data,ts:serverTimestamp()});
+  } else {
+    tugasData.unshift({id:'t'+Date.now(),...data});
+    renderTugasList();
+  }
+  document.getElementById('t-judul').value='';
+  document.getElementById('t-grup').value='';
+  document.getElementById('t-desc').value='';
+  document.getElementById('t-lokasi').value='';
+  document.getElementById('t-deadline').value='';
+  document.querySelectorAll('.priority-btn').forEach(b=>b.className='priority-btn');
+  selectedPrio='';
+  showToast('✅ Tugas berhasil disimpan!');
+}
+
+async function toggleTugas(id) {
+  const t = tugasData.find(x=>x.id===id); if(!t) return;
+  t.selesai = !t.selesai;
+  if (useFirebase) {
+    const {db,doc,updateDoc} = window.DB;
+    await updateDoc(doc(db,'tugas',id),{selesai:t.selesai});
+  }
+  renderTugasList();
+}
+
+function renderTugasList() {
+  const el = document.getElementById('tugasList');
+  if (!tugasData.length) { el.innerHTML='<div style="text-align:center;padding:20px;color:var(--text3);font-size:13px">Belum ada tugas</div>'; return; }
+  el.innerHTML = tugasData.map(t => {
+    const g = grups.find(x=>x.id===t.grupId)||{emoji:'📋',nama:t.grupId||'Umum'};
+    return `<div class="tugas-item">
+      <div class="tugas-check${t.selesai?' done':''}" onclick="toggleTugas('${t.id}')">${t.selesai?'✓':''}</div>
+      <div style="flex:1;min-width:0">
+        <div class="tugas-title${t.selesai?' done-text':''}">${t.judul}</div>
+        <div class="tugas-meta">${g.emoji} ${g.nama} • ${t.prio} • ${t.deadline}</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ══════════════════════════════
+// NOTIFIKASI
+// ══════════════════════════════
+function renderNotifs() {
+  const el = document.getElementById('notifList');
+  if (!notifData.length) { el.innerHTML='<div class="empty-state"><span class="empty-state-icon">🔔</span><div>Tidak ada notifikasi</div></div>'; return; }
+  el.innerHTML = notifData.map(n => `
+    <div class="notif-item ${n.type}">
+      <span class="notif-icon">${n.icon||'🔔'}</span>
+      <div style="flex:1;min-width:0">
+        <div class="notif-title">${n.title}<span class="notif-badge badge-${n.type}">${(n.type||'').toUpperCase()}</span></div>
+        <div class="notif-desc">${n.desc}</div>
+        <div class="notif-time">${n.waktu||''} • ${n.grup||''}</div>
+      </div>
+    </div>
+  `).join('');
+}
+
+// ══════════════════════════════
+// LAPORAN
+// ══════════════════════════════
+function renderLaporan() {
+  document.getElementById('lap-total').textContent = msgs.length;
+  document.getElementById('lap-urgent').textContent = msgs.filter(m=>m.status==='urgent').length;
+  document.getElementById('lap-selesai').textContent = tugasData.filter(t=>t.selesai).length;
+  document.getElementById('lap-tunggu').textContent = tugasData.filter(t=>!t.selesai).length;
+  document.getElementById('lap-grup').textContent = grups.length;
+
+  const el = document.getElementById('lapGrup');
+  if (!grups.length) { el.innerHTML='<div style="color:var(--text3);font-size:13px;text-align:center;padding:10px">Belum ada grup</div>'; return; }
+  el.innerHTML = grups.map(g => {
+    const total = msgs.filter(m=>m.grupId===g.id).length;
+    const selesai = msgs.filter(m=>m.grupId===g.id&&m.status==='selesai').length;
+    const pct = total>0?Math.round(selesai/total*100):0;
+    return `<div class="lap-row" style="flex-direction:column;align-items:stretch">
+      <div style="display:flex;justify-content:space-between;margin-bottom:4px">
+        <span class="lap-label">${g.emoji} ${g.nama}</span>
+        <span class="lap-val" style="color:var(--info)">${selesai}/${total}</span>
+      </div>
+      <div class="prog-bar"><div class="prog-fill" style="width:${pct}%"></div></div>
+    </div>`;
+  }).join('');
+}
+
+function exportCSV() {
+  const tgl = new Date().toISOString().split('T')[0];
+  let csv = 'Grup,Total Pesan,Selesai,Urgent,Progress\n';
+  grups.forEach(g => {
+    const total = msgs.filter(m=>m.grupId===g.id).length;
+    const selesai = msgs.filter(m=>m.grupId===g.id&&m.status==='selesai').length;
+    const urgent = msgs.filter(m=>m.grupId===g.id&&m.status==='urgent').length;
+    const pct = total>0?Math.round(selesai/total*100):0;
+    csv += `${g.nama},${total},${selesai},${urgent},${pct}%\n`;
+  });
+  const blob = new Blob([csv],{type:'text/csv'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `laporan-rt-${tgl}.csv`;
+  a.click();
+  showToast('📄 CSV berhasil diunduh');
+}
+
+function shareWA() {
+  const tgl = new Date().toLocaleDateString('id-ID');
+  const lines = grups.map(g=>{
+    const t=msgs.filter(m=>m.grupId===g.id).length;
+    const s=msgs.filter(m=>m.grupId===g.id&&m.status==='selesai').length;
+    return `${g.emoji} ${g.nama}: ${s}/${t} selesai`;
+  }).join('\n');
+  const txt = encodeURIComponent(`📊 *Laporan Harian Rumah Tangga*\n📅 ${tgl}\n\n${lines}\n\n✅ Total selesai: ${tugasData.filter(t=>t.selesai).length}\n⏳ Menunggu: ${tugasData.filter(t=>!t.selesai).length}`);
+  window.open(`https://wa.me/?text=${txt}`,'_blank');
+}
+
+// ══════════════════════════════
+// FAB & TOAST
+// ══════════════════════════════
+function fabAction() { openTambahPesan(); }
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent=msg; t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'),2500);
+}
+
+// ══════════════════════════════
+// INIT
+// ══════════════════════════════
+document.getElementById('lapTgl').textContent = new Date().toLocaleDateString('id-ID',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
+renderEmojiGrid();
+renderColorGrid();
+renderStatusFilters();
+checkSetup();
+
+// Tunggu Firebase atau gunakan lokal
+window.addEventListener('firebase-ready', () => {
+  if (localStorage.getItem('fb_projectId')) initFirebaseMode();
+});
+
+// Jika sudah skip/setup sebelumnya
+if (localStorage.getItem('fb_skip') === '1') {
+  initLocalMode();
+} else if (!localStorage.getItem('fb_projectId')) {
+  // Tampilkan setup
+} else {
+  // Firebase akan ready via module
+  setTimeout(()=>{
+    if(!window.firebaseReady) { setConnStatus('err'); initLocalMode(); }
+  }, 5000);
+}
+</script>
+</body>
+</html>
